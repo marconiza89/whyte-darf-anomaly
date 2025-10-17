@@ -7,7 +7,7 @@ interface AppState {
   
   // Progresso del bottone EXPLORE (0-1)
   exploreProgress: number;
-  setExploreProgress: (progress: number) => void;
+  setExploreProgress: (progress: number | ((prev: number) => number)) => void;
   
   // Camera target position
   cameraTarget: { x: number; y: number; z: number };
@@ -23,7 +23,9 @@ export const useAppStore = create<AppState>((set) => ({
   setStep: (step) => set({ currentStep: step }),
   
   exploreProgress: 0,
-  setExploreProgress: (progress) => set({ exploreProgress: progress }),
+  setExploreProgress: (progress) => set((state) => ({
+    exploreProgress: typeof progress === 'function' ? progress(state.exploreProgress) : progress
+  })),
   
   cameraTarget: { x: 0, y: 0, z: 10 },
   setCameraTarget: (target) => set({ cameraTarget: target }),

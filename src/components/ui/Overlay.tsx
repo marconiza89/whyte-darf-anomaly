@@ -2,11 +2,13 @@
 import ResponsiveTriangle from "./Triangle";
 import { useAppStore } from "@/stores/store";
 import { useEffect, useRef, useState } from "react";
+import { SignalTuner } from "./minigames/SignalTuner";
 
 export function Overlay() {
   return (
     <div className="">
       <Hero />
+      <SignalTuner />
     </div>
   );
 }
@@ -19,10 +21,11 @@ function Hero() {
   const isExplorePressed = useAppStore((state) => state.isExplorePressed);
   const setExplorePressed = useAppStore((state) => state.setExplorePressed);
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
 
   // Progress increment speed (reaches 1.0 in ~3 seconds)
-  const PROGRESS_SPEED = 0.333; // per second
+  const PROGRESS_DURATION = 3000; // milliseconds
 
   const handleMouseDown = () => {
     setExplorePressed(true);
@@ -30,36 +33,52 @@ function Hero() {
 
   const handleMouseUp = () => {
     setExplorePressed(false);
-    // Reset progress if not completed
-    if (exploreProgress < 1) {
-      setExploreProgress(0);
-    }
+    // Reset progress if not completed using functional form
+    setExploreProgress((prev) => {
+      if (prev < 1) {
+        return 0;
+      }
+      return prev;
+    });
   };
 
-  // Handle progress increment
+  // Handle progress increment with requestAnimationFrame
   useEffect(() => {
     if (isExplorePressed && currentStep === 0) {
-      intervalRef.current = setInterval(() => {
-        const newProgress = Math.min(exploreProgress + PROGRESS_SPEED / 60, 1); // 60fps
-        setExploreProgress(newProgress);
+      lastTimeRef.current = performance.now();
+      
+      const animate = (currentTime: number) => {
+        const deltaTime = currentTime - lastTimeRef.current;
+        lastTimeRef.current = currentTime;
         
-        // When progress reaches 1, transition to step 1
-        if (newProgress >= 1) {
-          setTimeout(() => {
-            setStep(1);
-          }, 300);
-        }
-      }, 1000 / 60); // 60fps
+        setExploreProgress((prev) => {
+          const increment = deltaTime / PROGRESS_DURATION;
+          const newProgress = Math.min(prev + increment, 1);
+          
+          // When progress reaches 1, transition to step 1
+          if (newProgress >= 1 && prev < 1) {
+            setTimeout(() => {
+              setStep(1);
+            }, 300);
+          }
+          
+          return newProgress;
+        });
+        
+        animationRef.current = requestAnimationFrame(animate);
+      };
+      
+      animationRef.current = requestAnimationFrame(animate);
     } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
       }
     }
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
       }
     };
   }, [isExplorePressed, currentStep, setExploreProgress, setStep]);

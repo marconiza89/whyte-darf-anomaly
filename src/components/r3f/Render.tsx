@@ -15,20 +15,20 @@ export const sunposition: [number, number, number] = [0, 55, -100];
 function CameraController() {
     const { camera } = useThree();
     const exploreProgress = useAppStore((state) => state.exploreProgress);
-    
+
     useFrame((_, delta) => {
         // Smooth camera transition based on explore button progress
-        const targetZ = THREE.MathUtils.lerp(10, 2, exploreProgress);
+        const targetZ = THREE.MathUtils.lerp(10, 5, exploreProgress);
         camera.position.z = THREE.MathUtils.lerp(
             camera.position.z,
             targetZ,
             delta * 2
         );
-        
+
         // Keep camera looking at origin
         camera.lookAt(0, 0, 0);
     });
-    
+
     return null;
 }
 
@@ -65,6 +65,24 @@ function TerrainGrid({ gridX = 2, gridZ = 2 }: { gridX?: number; gridZ?: number 
     return <>{terrains}</>;
 }
 
+function Anomaly() {
+    const exploreProgress = useAppStore((state) => state.exploreProgress);
+    const distort = THREE.MathUtils.lerp(0.4, 0.8, exploreProgress);
+    return (
+        <mesh>
+            <sphereGeometry args={[1.5, 64, 64]} />
+            <MeshDistortMaterial
+                roughness={0.}
+                color={"#000000"}
+                distort={distort}
+                speed={2}
+            />
+        </mesh>
+
+    )
+}
+
+
 function Water() {
     return (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 1, 0]}>
@@ -97,6 +115,7 @@ function Rock({ position, scale, dscale }: { position: [number, number, number],
 
 export function Render() {
     const [canvasKey, setCanvasKey] = useState(0);
+  
 
     useEffect(() => {
         if (process.env.NODE_ENV === "development") {
@@ -145,16 +164,8 @@ export function Render() {
                         opacity={0.4}
                         position={[0, 5, -30]}
                     />
-                    <mesh>
-                        <sphereGeometry args={[1.5, 64, 64]} />
-                        <MeshDistortMaterial
-                            roughness={0.}
+                    <Anomaly />
 
-                            color={"#000000"}
-                            distort={0.3}
-                            speed={2}
-                        />
-                    </mesh>
                     <color attach="background" args={['#000000']} />
                     <Effects />
                 </Suspense>
