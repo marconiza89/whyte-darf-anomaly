@@ -3,6 +3,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Suspense, useRef, useEffect, useState, use, forwardRef, ComponentProps } from "react";
 import { MeshReflectorMaterial,Circle, Lightformer, Float, useVideoTexture, useProgress, Html, OrbitControls, SoftShadows } from "@react-three/drei";
 import { lightcolor, sunposition } from "./Render";
+import { useAppStore } from "@/stores/store";
 
 import {
   EffectComposer,
@@ -35,8 +36,19 @@ export function Effects() {
  
   const material = useRef<Mesh>(null!); 
   
-  return (   
-          
+  // Get implosion progress from store
+  const implosionProgress = useAppStore((state) => state.implosionProgress);
+  const currentStep = useAppStore((state) => state.currentStep);
+  
+  // Calculate brightness based on implosion progress
+  // During implosion (step 0.5), darken the scene from 0 to -0.8
+  const brightness = currentStep === 0.5 
+    ? -0.05 - (implosionProgress * 1)  // Goes from -0.05 to -0.8
+    : currentStep >= 1 
+    ? -1  // Keep dark after implosion
+    : -0.05;  // Normal brightness before implosion
+  
+  return (           
              
         <Suspense>
           <Sun ref={material} />    
@@ -60,5 +72,4 @@ export function Effects() {
     
   );
 }
-
 

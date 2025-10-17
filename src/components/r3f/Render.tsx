@@ -2,11 +2,12 @@
 import { Canvas, useFrame, extend, useThree } from "@react-three/fiber";
 import { type ThreeElement } from '@react-three/fiber'
 import { Suspense, useEffect, useRef, useState } from "react";
-import { Sphere, MeshDistortMaterial, Environment, Lightformer, useTexture, MeshReflectorMaterial } from "@react-three/drei";
+import { Sphere, MeshDistortMaterial, Environment, Lightformer, useTexture, MeshReflectorMaterial, OrbitControls } from "@react-three/drei";
 import { Effects } from "./Effects";
 import { WindParticles } from "./WindParticles";
 import { useAppStore } from "@/stores/store";
 import * as THREE from "three";
+import { Model } from "./Telescope";
 
 
 export const lightcolor = "#9aceff";
@@ -49,6 +50,23 @@ function Terrain({ position }: { position: [number, number, number] }) {
     );
 }
 
+function GaiaTerrain({ position }: { position: [number, number, number] }) {
+    const colorMap = useTexture('/textures/aerial_rocks_04_diff_1k.jpg');
+    const displacementMap = useTexture('/textures/aerial_rocks_04_disp_1k.png');
+    return (
+        <mesh castShadow receiveShadow position={position} rotation={[-Math.PI / 2, 0, 0]} >
+            <planeGeometry args={[20, 20, 256, 256]} />
+            <meshStandardMaterial
+                
+
+                map={colorMap}
+                displacementMap={displacementMap}
+                displacementScale={1.9}
+            />
+        </mesh>
+    );
+}
+
 function TerrainGrid({ gridX = 2, gridZ = 2 }: { gridX?: number; gridZ?: number }) {
     const terrains = [];
 
@@ -65,11 +83,51 @@ function TerrainGrid({ gridX = 2, gridZ = 2 }: { gridX?: number; gridZ?: number 
     return <>{terrains}</>;
 }
 
+function GaiaTerrainGrid({ gridX = 2, gridZ = 2 }: { gridX?: number; gridZ?: number }) {
+    const terrains = [];
+
+    for (let x = -gridX; x <= gridX; x++) {
+        for (let z = -gridZ; z <= gridZ; z++) {
+            terrains.push(
+                <Suspense key={`terrain-${x}-${z}`} fallback={null}>
+                    <GaiaTerrain position={[x * 20, 0, z * 20]} />
+                </Suspense>
+            );
+        }
+    }
+
+    return <>{terrains}</>;
+}
+
 function Anomaly() {
     const exploreProgress = useAppStore((state) => state.exploreProgress);
+    const implosionProgress = useAppStore((state) => state.implosionProgress);
+    const currentStep = useAppStore((state) => state.currentStep);
+    const meshRef = useRef<THREE.Mesh>(null);
+    
+    // Calculate distortion based on explore progress
     const distort = THREE.MathUtils.lerp(0.4, 0.8, exploreProgress);
+    
+    useFrame(() => {
+        if (meshRef.current) {
+            // During implosion phase (step 0.5), scale down from 1.0 to 0.1
+            if (currentStep === 0.5) {
+                const targetScale = THREE.MathUtils.lerp(1.0, 0.1, implosionProgress);
+                meshRef.current.scale.setScalar(targetScale);
+            }
+            // Otherwise maintain scale at 1.0
+            else if (currentStep === 0) {
+                meshRef.current.scale.setScalar(1.0);
+            }
+            // After implosion, keep at 0.1
+            else if (currentStep >= 1) {
+                meshRef.current.scale.setScalar(0.1);
+            }
+        }
+    });
+    
     return (
-        <mesh>
+        <mesh ref={meshRef}>
             <sphereGeometry args={[1.5, 64, 64]} />
             <MeshDistortMaterial
                 roughness={0.}
@@ -78,7 +136,6 @@ function Anomaly() {
                 speed={2}
             />
         </mesh>
-
     )
 }
 
@@ -113,6 +170,24 @@ function Rock({ position, scale, dscale }: { position: [number, number, number],
     );
 }
 
+function GaiaRock({ position, scale, dscale }: { position: [number, number, number], scale: [number, number, number], dscale: number }) {
+    const colorMap = useTexture('/textures/aerial_rocks_04_diff_1k.jpg');
+    const displacementMap = useTexture('/textures/aerial_rocks_04_disp_1k.png');
+    return (
+        <mesh castShadow receiveShadow position={position} scale={scale} rotation={[0, 0, 0]} >
+            <icosahedronGeometry args={[20, 20,]} />
+            <meshStandardMaterial
+                roughness={1.}
+                metalness={0.6}
+                color={"#686868"}
+                map={colorMap}
+                displacementMap={displacementMap}
+                displacementScale={dscale}
+            />
+        </mesh>
+    );
+}
+
 export function Render() {
     const [canvasKey, setCanvasKey] = useState(0);
   
@@ -132,7 +207,21 @@ export function Render() {
             >
                 <Suspense fallback={null}>
                     <CameraController />
-                    <directionalLight color={lightcolor} intensity={0.4}
+                    <Scene1 />
+                    
+
+                    <color attach="background" args={['#000000']} />
+                    <Effects />
+                </Suspense>
+            </Canvas>
+        </div>
+    );
+}
+
+function Scene1() {
+  return (
+    <>
+    <directionalLight color={lightcolor} intensity={0.4}
                         castShadow
                         shadow-mapSize-width={1024}
                         shadow-mapSize-height={1024}
@@ -165,11 +254,40 @@ export function Render() {
                         position={[0, 5, -30]}
                     />
                     <Anomaly />
+     
+    </>
+  );
+}
 
-                    <color attach="background" args={['#000000']} />
-                    <Effects />
-                </Suspense>
-            </Canvas>
-        </div>
-    );
+function Scene2() {
+  return (
+    <>
+    <directionalLight color={lightcolor} intensity={0.4}
+                        castShadow
+                        shadow-mapSize-width={1024}
+                        shadow-mapSize-height={1024}
+                        shadow-camera-far={100}
+                        shadow-camera-left={-100}
+                        shadow-camera-right={100}
+                        shadow-camera-top={100}
+                        shadow-camera-bottom={-100}
+                        position={sunposition}
+                    />
+                    <OrbitControls enableZoom={true} enablePan={true} />
+                    <Environment background files={"/textures/qwantani_night_2k.hdr"} backgroundIntensity={0.2} backgroundRotation={[0,-1.5,0]} environmentIntensity={0.3} />
+                    <group position={[0, -5, 0]} >
+                        <GaiaTerrainGrid gridX={3} gridZ={2} />
+                    
+                       
+                       
+                        <GaiaRock position={[42, -6, -60]} dscale={20} scale={[3, 0.8, 0.5]} />
+                      
+                        {/* <Water /> */}
+                    </group>
+                     <Model rotation={[0,Math.PI,0]} position={[0, 5, -70]} scale={20000} />
+         
+                  
+     
+    </>
+  );
 }
