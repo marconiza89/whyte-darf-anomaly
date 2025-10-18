@@ -11,6 +11,8 @@ export function SignalTuner() {
   const [showSuccess, setShowSuccess] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
+  const frequencyRef = useRef(50); // Use ref for canvas to avoid re-render
+  const proximityRef = useRef(0);
   
   // Target frequency (around 75 for example)
   const TARGET_FREQUENCY = 73.5;
@@ -19,6 +21,12 @@ export function SignalTuner() {
   // Calculate how close we are to target (0-1, where 1 is perfect)
   const proximity = Math.max(0, 1 - Math.abs(frequency - TARGET_FREQUENCY) / 50);
   const isInLockRange = Math.abs(frequency - TARGET_FREQUENCY) < LOCK_THRESHOLD;
+
+  // Update refs when values change
+  useEffect(() => {
+    frequencyRef.current = frequency;
+    proximityRef.current = proximity;
+  }, [frequency, proximity]);
 
   // Handle frequency change
   const handleFrequencyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,7 +52,7 @@ export function SignalTuner() {
     }
   }, [isInLockRange, isLocked, setStep]);
 
-  // Canvas visualization
+  // Canvas visualization - only re-initialize when locked state changes
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -65,9 +73,13 @@ export function SignalTuner() {
     const draw = () => {
       time += 0.016;
       
-      // Clear
+      // Clear with semi-transparent black for trail effect
       ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
       ctx.fillRect(0, 0, w, h);
+      
+      // Use refs to get current values without re-rendering
+      const currentFreq = frequencyRef.current;
+      const currentProximity = proximityRef.current;
       
       // Draw frequency spectrum
       const barCount = 100;
@@ -77,19 +89,19 @@ export function SignalTuner() {
         const x = i * barWidth;
         const freq = (i / barCount) * 100;
         const distFromTarget = Math.abs(freq - TARGET_FREQUENCY);
-        const distFromCurrent = Math.abs(freq - frequency);
+        const distFromCurrent = Math.abs(freq - currentFreq);
         
         // Base noise height
-        let noiseHeight = Math.random() * 20 * (1 - proximity);
+        let noiseHeight = Math.random() * 20 * (1 - currentProximity);
         
         // Signal peak at target frequency
         if (distFromTarget < 5) {
           const peakStrength = 1 - (distFromTarget / 5);
-          noiseHeight += peakStrength * 60 * proximity;
+          noiseHeight += peakStrength * 60 * currentProximity;
           
           // Add harmonic pattern when close
-          if (proximity > 0.5) {
-            noiseHeight += Math.sin(time * 3 + i * 0.2) * 20 * proximity;
+          if (currentProximity > 0.5) {
+            noiseHeight += Math.sin(time * 3 + i * 0.2) * 20 * currentProximity;
           }
         }
         
@@ -101,8 +113,8 @@ export function SignalTuner() {
         const barHeight = Math.max(2, noiseHeight);
         
         // Color based on proximity and position
-        const hue = 200 + (proximity * 60); // Blue to cyan
-        const alpha = distFromTarget < 5 ? 0.3 + proximity * 0.7 : 0.3;
+        const hue = 200 + (currentProximity * 60); // Blue to cyan
+        const alpha = distFromTarget < 5 ? 0.3 + currentProximity * 0.7 : 0.3;
         
         ctx.fillStyle = `hsla(${hue}, 70%, 50%, ${alpha})`;
         ctx.fillRect(x, h - barHeight, barWidth - 1, barHeight);
@@ -132,8 +144,8 @@ export function SignalTuner() {
       }
       
       // Draw signal pattern when in range
-      if (proximity > 0.7) {
-        ctx.strokeStyle = `rgba(154, 206, 255, ${proximity})`;
+      if (currentProximity > 0.7) {
+        ctx.strokeStyle = `rgba(154, 206, 255, ${currentProximity})`;
         ctx.lineWidth = 2;
         ctx.beginPath();
         
@@ -142,7 +154,7 @@ export function SignalTuner() {
           const distFromTarget = Math.abs(freq - TARGET_FREQUENCY);
           
           if (distFromTarget < 10) {
-            const y = h / 2 + Math.sin(x * 0.1 + time * 5) * 30 * proximity;
+            const y = h / 2 + Math.sin(x * 0.1 + time * 5) * 30 * currentProximity;
             if (x === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           }
@@ -160,7 +172,7 @@ export function SignalTuner() {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [frequency, proximity, isLocked]);
+  }, [isLocked]); // Only re-initialize when lock state changes
 
   if (currentStep !== 1) {
     return null;

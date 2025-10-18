@@ -44,22 +44,27 @@ function StartScreen({ onStart }: { onStart: () => void }) {
 function ImplosionPhase() {
   const currentStep = useAppStore((state) => state.currentStep);
   const setStep = useAppStore((state) => state.setStep);
+  const setScene = useAppStore((state) => state.setScene);
   const implosionProgress = useAppStore((state) => state.implosionProgress);
   const setImplosionProgress = useAppStore((state) => state.setImplosionProgress);
+  const setFadeInProgress = useAppStore((state) => state.setFadeInProgress);
   
   const implosionAudioRef = useRef<HTMLAudioElement | null>(null);
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const hasStartedRef = useRef(false);
+  const sceneChangedRef = useRef(false);
 
   // Duration of implosion animation in milliseconds
   const IMPLOSION_DURATION = 2500;
+  const FADE_IN_DURATION = 1000;
 
   // Initialize and play implosion audio when entering this phase
   useEffect(() => {
     if (currentStep === 0.5 && !hasStartedRef.current) {
       console.log("Starting implosion phase");
       hasStartedRef.current = true;
+      sceneChangedRef.current = false;
       
       // Create and play implosion sound
       const audio = new Audio('/audio/implosion.mp3');
@@ -95,6 +100,7 @@ function ImplosionPhase() {
       }
     } else if (currentStep !== 0.5) {
       hasStartedRef.current = false;
+      sceneChangedRef.current = false;
     }
   }, [currentStep]);
 
@@ -114,12 +120,42 @@ function ImplosionPhase() {
         
         setImplosionProgress(currentProgress);
         
-        // When implosion completes, transition to step 1
-        if (currentProgress >= 1) {
-          setTimeout(() => {
-            setStep(1);
-            hasStartedRef.current = false; // Reset for potential future use
-          }, 500);
+        // When implosion completes, change scene and start fade in
+        if (currentProgress >= 1 && !sceneChangedRef.current) {
+          console.log("Implosion complete, changing scene and starting fade in");
+          sceneChangedRef.current = true;
+          
+          // Change scene
+          setScene(1);
+          
+          // Start fade in animation
+          let fadeProgress = 0;
+          setFadeInProgress(0);
+          lastTimeRef.current = performance.now();
+          
+          const fadeIn = (fadeTime: number) => {
+            const fadeDelta = fadeTime - lastTimeRef.current;
+            lastTimeRef.current = fadeTime;
+            
+            const fadeIncrement = fadeDelta / FADE_IN_DURATION;
+            fadeProgress = Math.min(fadeProgress + fadeIncrement, 1);
+            
+            setFadeInProgress(fadeProgress);
+            
+            // When fade in completes, transition to step 1
+            if (fadeProgress >= 1) {
+              console.log("Fade in complete, transitioning to step 1");
+              setTimeout(() => {
+                setStep(1);
+                hasStartedRef.current = false;
+              }, 100);
+              return;
+            }
+            
+            animationRef.current = requestAnimationFrame(fadeIn);
+          };
+          
+          animationRef.current = requestAnimationFrame(fadeIn);
           return;
         }
         
@@ -139,7 +175,7 @@ function ImplosionPhase() {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [currentStep, setImplosionProgress, setStep]);
+  }, [currentStep, setImplosionProgress, setFadeInProgress, setScene, setStep]);
 
   // Cleanup audio
   useEffect(() => {

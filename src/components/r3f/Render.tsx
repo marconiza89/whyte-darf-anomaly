@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { Model } from "./Telescope";
 
 
-export const lightcolor = "#9aceff";
+export const lightcolor = "#a4c9ff";
 export const sunposition: [number, number, number] = [0, 55, -100];
 
 function CameraController() {
@@ -100,39 +100,14 @@ function GaiaTerrainGrid({ gridX = 2, gridZ = 2 }: { gridX?: number; gridZ?: num
 }
 
 function Anomaly() {
-    const exploreProgress = useAppStore((state) => state.exploreProgress);
-    const implosionProgress = useAppStore((state) => state.implosionProgress);
-    const currentStep = useAppStore((state) => state.currentStep);
-    const meshRef = useRef<THREE.Mesh>(null);
-    
-    // Calculate distortion based on explore progress
-    const distort = THREE.MathUtils.lerp(0.4, 0.8, exploreProgress);
-    
-    useFrame(() => {
-        if (meshRef.current) {
-            // During implosion phase (step 0.5), scale down from 1.0 to 0.1
-            if (currentStep === 0.5) {
-                const targetScale = THREE.MathUtils.lerp(1.0, 0.1, implosionProgress);
-                meshRef.current.scale.setScalar(targetScale);
-            }
-            // Otherwise maintain scale at 1.0
-            else if (currentStep === 0) {
-                meshRef.current.scale.setScalar(1.0);
-            }
-            // After implosion, keep at 0.1
-            else if (currentStep >= 1) {
-                meshRef.current.scale.setScalar(0.1);
-            }
-        }
-    });
-    
+    const meshRef = useRef<THREE.Mesh>(null);    
     return (
         <mesh ref={meshRef}>
             <sphereGeometry args={[1.5, 64, 64]} />
             <MeshDistortMaterial
                 roughness={0.}
                 color={"#000000"}
-                distort={distort}
+                distort={0.4}
                 speed={2}
             />
         </mesh>
@@ -190,6 +165,7 @@ function GaiaRock({ position, scale, dscale }: { position: [number, number, numb
 
 export function Render() {
     const [canvasKey, setCanvasKey] = useState(0);
+    const currentScene = useAppStore((state) => state.currentScene);
   
 
     useEffect(() => {

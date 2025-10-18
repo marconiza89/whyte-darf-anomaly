@@ -9,6 +9,13 @@ interface AppState {
   currentStep: number;
   setStep: (step: number) => void;
   
+  // Gestione scene 3D
+  // 0 = Initial scene (terrain, anomaly, rocks)
+  // 1 = Post-implosion scene (sphere)
+  // 2 = ...
+  currentScene: number;
+  setScene: (scene: number) => void;
+  
   // Progresso del bottone EXPLORE (0-1)
   exploreProgress: number;
   setExploreProgress: (progress: number | ((prev: number) => number)) => void;
@@ -16,6 +23,10 @@ interface AppState {
   // Progresso dell'implosione (0-1)
   implosionProgress: number;
   setImplosionProgress: (progress: number) => void;
+  
+  // Progresso fade in dopo cambio scena (0-1)
+  fadeInProgress: number;
+  setFadeInProgress: (progress: number) => void;
   
   // Camera target position
   cameraTarget: { x: number; y: number; z: number };
@@ -30,6 +41,9 @@ export const useAppStore = create<AppState>((set) => ({
   currentStep: 0,
   setStep: (step) => set({ currentStep: step }),
   
+  currentScene: 0,
+  setScene: (scene) => set({ currentScene: scene }),
+  
   exploreProgress: 0,
   setExploreProgress: (progress) => set((state) => ({
     exploreProgress: typeof progress === 'function' ? progress(state.exploreProgress) : progress
@@ -37,6 +51,9 @@ export const useAppStore = create<AppState>((set) => ({
   
   implosionProgress: 0,
   setImplosionProgress: (progress) => set({ implosionProgress: progress }),
+  
+  fadeInProgress: 0,
+  setFadeInProgress: (progress) => set({ fadeInProgress: progress }),
   
   cameraTarget: { x: 0, y: 0, z: 10 },
   setCameraTarget: (target) => set({ cameraTarget: target }),
