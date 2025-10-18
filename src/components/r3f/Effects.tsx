@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useRef,  forwardRef, } from "react";
-import { lightcolor, sunposition } from "./Render";
+import { Suspense, useRef, forwardRef } from "react";
+import { sunposition } from "./Render";
 import {
   EffectComposer,
   GodRays,
@@ -15,16 +15,48 @@ import {
   SSAO,
   Noise,
 } from "@react-three/postprocessing";
-
+import { useFrame } from "@react-three/fiber";
 import { Mesh } from 'three'
+import * as THREE from 'three'
+import { useAppStore } from "@/stores/store";
 
-const Sun = forwardRef<Mesh, any>((props, ref) => (
-  <mesh ref={ref} position={sunposition} {...props}>
-    <circleGeometry args={[2, 64]} />
-    <meshStandardMaterial emissive={lightcolor} envMapIntensity={1} color={"#ffbb00"} />
-  </mesh>
-));
+const Sun = forwardRef<Mesh, any>((props, ref) => {
+  const meshRef = useRef<Mesh>(null!);
+  const implosionProgress = useAppStore((state) => state.implosionProgress);
+  
+  // Colori: blu iniziale -> rosso finale
+  const colorlight ="#895858"
+const colorlight2 ="#a00000"
+  const blueColor = new THREE.Color("#a4c9ff");
+  const redColor = new THREE.Color("#a00000");
+  const emissiveBlue = new THREE.Color("#a4c9ff");
+  const emissiveRed = new THREE.Color("#a00000");
+  
+  useFrame(() => {
+    if (!meshRef.current) return;
+    
+    // Lerp tra blu e rosso in base a implosionProgress
+    const material = meshRef.current.material as THREE.MeshStandardMaterial;
+    const currentColor = blueColor.clone().lerp(redColor, implosionProgress);
+    const currentEmissive = emissiveBlue.clone().lerp(emissiveRed, implosionProgress);
+    
+    material.color.copy(currentColor);
+    material.emissive.copy(currentEmissive);
+  });
+  
+  return (
+    <mesh ref={(node) => {
+      meshRef.current = node!;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    }} position={sunposition} {...props}>
+      <circleGeometry args={[2, 64]} />
+      <meshStandardMaterial emissive={"#a4c9ff"}  color={"#ffbb00"} />
+    </mesh>
+  );
+});
 
+Sun.displayName = "Sun";
 
 export function Effects() { 
   const material = useRef<Mesh>(null!);   
@@ -42,4 +74,3 @@ export function Effects() {
     
   );
 }
-

@@ -14,7 +14,7 @@ export function Overlay() {
         <>
           <Hero />
           <ImplosionPhase />
-          <SignalTuner />
+          {/* <SignalTuner /> */}
         </>
       )}
     </div>
@@ -126,7 +126,7 @@ function ImplosionPhase() {
           sceneChangedRef.current = true;
           
           // Change scene
-          setScene(1);
+          
           
           // Start fade in animation
           let fadeProgress = 0;
@@ -175,7 +175,7 @@ function ImplosionPhase() {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [currentStep, setImplosionProgress, setFadeInProgress, setScene, setStep]);
+  }, [currentStep, setImplosionProgress, setFadeInProgress, setStep]);
 
   // Cleanup audio
   useEffect(() => {

@@ -13,6 +13,43 @@ import { Model } from "./Telescope";
 export const lightcolor = "#a4c9ff";
 export const sunposition: [number, number, number] = [0, 55, -100];
 
+// Componente per la luce dinamica che cambia colore durante implosion
+function DynamicLight() {
+    const lightRef = useRef<THREE.DirectionalLight>(null!);
+    const implosionProgress = useAppStore((state) => state.implosionProgress);
+
+    
+    
+    const blueColor = new THREE.Color("#a4c9ff");
+    const redColor = new THREE.Color("#895858");
+    
+    
+    useFrame(() => {
+        if (!lightRef.current) return;
+        
+        // Lerp tra blu e rosso in base a implosionProgress
+        const currentColor = blueColor.clone().lerp(redColor, implosionProgress);
+        lightRef.current.color.copy(currentColor);
+    });
+    
+    return (
+        <directionalLight 
+            ref={lightRef}
+            color={lightcolor} 
+            intensity={0.4}
+            castShadow
+            shadow-mapSize-width={1024}
+            shadow-mapSize-height={1024}
+            shadow-camera-far={100}
+            shadow-camera-left={-100}
+            shadow-camera-right={100}
+            shadow-camera-top={100}
+            shadow-camera-bottom={-100}
+            position={sunposition}
+        />
+    );
+}
+
 function CameraController() {
     const { camera } = useThree();
     const exploreProgress = useAppStore((state) => state.exploreProgress);
@@ -120,7 +157,7 @@ function Water() {
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 1, 0]}>
             <planeGeometry args={[80, 80, 256, 256]} />
             <MeshReflectorMaterial
-                roughness={0.}
+                roughness={0.109}
                 color={"#000"}
             />
         </mesh>
@@ -165,8 +202,6 @@ function GaiaRock({ position, scale, dscale }: { position: [number, number, numb
 
 export function Render() {
     const [canvasKey, setCanvasKey] = useState(0);
-    const currentScene = useAppStore((state) => state.currentScene);
-  
 
     useEffect(() => {
         if (process.env.NODE_ENV === "development") {
@@ -197,20 +232,12 @@ export function Render() {
 function Scene1() {
   return (
     <>
-    <directionalLight color={lightcolor} intensity={0.4}
-                        castShadow
-                        shadow-mapSize-width={1024}
-                        shadow-mapSize-height={1024}
-                        shadow-camera-far={100}
-                        shadow-camera-left={-100}
-                        shadow-camera-right={100}
-                        shadow-camera-top={100}
-                        shadow-camera-bottom={-100}
-                        position={sunposition}
-                    />
-                    <Environment files={"/textures/rogland_clear_night_1k.exr"} environmentIntensity={0.2} />
+    <DynamicLight />
+                    <Environment files={"/textures/rogland_clear_night_1k.exr"} blur={0.8} environmentIntensity={0.2} />
                     <group position={[0, -5, 0]} >
-                        <TerrainGrid gridX={3} gridZ={2} />
+                        <group  position={[0.7,0,-2]} >
+                            <TerrainGrid gridX={3} gridZ={2} />
+                        </group>
                         {/* <TerrainMap /> */}
                         <Rock position={[18, 0, -20]} dscale={10} scale={[0.2, 0.8, 0.2]} />
                         <Rock position={[12, -6, -60]} dscale={20} scale={[3, 0.3, 0.5]} />
@@ -225,7 +252,7 @@ function Scene1() {
                         noise={2.0}
                         noiseSpeed={0.5}
                         size={0.1}
-                        color={"#9aceff"}
+                        color={"#ff0000"}
                         opacity={0.4}
                         position={[0, 5, -30]}
                     />
@@ -238,17 +265,7 @@ function Scene1() {
 function Scene2() {
   return (
     <>
-    <directionalLight color={lightcolor} intensity={0.4}
-                        castShadow
-                        shadow-mapSize-width={1024}
-                        shadow-mapSize-height={1024}
-                        shadow-camera-far={100}
-                        shadow-camera-left={-100}
-                        shadow-camera-right={100}
-                        shadow-camera-top={100}
-                        shadow-camera-bottom={-100}
-                        position={sunposition}
-                    />
+    <DynamicLight />
                     <OrbitControls enableZoom={true} enablePan={true} />
                     <Environment background files={"/textures/qwantani_night_2k.hdr"} backgroundIntensity={0.2} backgroundRotation={[0,-1.5,0]} environmentIntensity={0.3} />
                     <group position={[0, -5, 0]} >

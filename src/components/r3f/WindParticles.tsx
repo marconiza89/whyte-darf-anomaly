@@ -2,6 +2,7 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { useAppStore } from "@/stores/store";
 
 type WindParticlesProps = {
 count?: number;
@@ -29,6 +30,8 @@ opacity = 0.6,
 position = [0, 0, 0],
 }: WindParticlesProps) {
 const materialRef = useRef<THREE.ShaderMaterial>(null!);
+const exploreProgress = useAppStore((state) => state.exploreProgress);
+const currentStep = useAppStore((state) => state.currentStep);
 
 const dir = useMemo(
 () => new THREE.Vector3(...direction).normalize(),
@@ -62,6 +65,8 @@ const uniforms = useMemo(
 () => ({
 uTime: { value: 0 },
 uSpeed: { value: speed },
+uSpeedMultiplier: { value: 1.0 }, // Controlla movimento direzionale
+uNoiseMultiplier: { value: 1.0 }, // Controlla floatamento (separato)
 uDir: { value: dir },
 uWidth: { value: area[0] },
 uNoiseAmp: { value: noise },
@@ -80,6 +85,41 @@ typeof window !== "undefined" ? Math.min(window.devicePixelRatio, 2) : 1,
 useFrame((_, delta) => {
 if (!materialRef.current) return;
 materialRef.current.uniforms.uTime.value += delta;
+
+// Leggi implosionProgress dallo store senza causare re-render
+const { implosionProgress } = useAppStore.getState();
+
+// Aggiorna colore delle particelle: blu -> rosso durante implosion
+const blueColor = new THREE.Color("#9aceff");
+const redColor = new THREE.Color("#ff4400");
+const currentColor = blueColor.clone().lerp(redColor, implosionProgress);
+materialRef.current.uniforms.uColor.value.copy(currentColor);
+
+// Solo durante la fase 0 (EXPLORE) moduliamo la velocità
+// Dopo la fase 0, non tocchiamo più gli uniform - lasciamo tutto com'è!
+if (currentStep === 0) {
+  let speedMult = 1.0;
+  let noiseMult = 1.0;
+
+  if (exploreProgress >= 0.95) {
+    // Ultimo 5%: rallenta da 3x a 0 in modo smooth
+    const fadeProgress = (exploreProgress - 0.95) / 0.05; // 0 a 1
+    speedMult = 3 * (1 - fadeProgress); // Da 3 a 0
+    noiseMult = 1.0; // Il noise rimane attivo per il floatamento
+  } else if (exploreProgress > 0) {
+    // 0-95%: aumenta da 1x a 3x
+    speedMult = 1 + (exploreProgress / 0.95) * 2; // Arriva a 3 al 95%
+    noiseMult = 1.0 + (exploreProgress / 0.95) * 0.5; // Aumenta leggermente anche il noise
+  } else {
+    // Nessun input, velocità normale
+    speedMult = 1.0;
+    noiseMult = 1.0;
+  }
+
+  materialRef.current.uniforms.uSpeedMultiplier.value = speedMult;
+  materialRef.current.uniforms.uNoiseMultiplier.value = noiseMult;
+}
+// Per le fasi 0.5, 1, 2+ non facciamo NULLA - gli uniform rimangono all'ultimo valore impostato
 });
 
 return (
@@ -94,6 +134,8 @@ uniforms={uniforms}
 vertexShader={/* glsl */ `
 uniform float uTime;
 uniform float uSpeed;
+uniform float uSpeedMultiplier;
+uniform float uNoiseMultiplier;
 uniform vec3 uDir;
 uniform float uWidth;
 uniform float uNoiseAmp;
@@ -108,7 +150,8 @@ uniform float uPR;
           vec3 pos = position;
           vec3 dir = normalize(uDir);
 
-          float v = aSpeed * uSpeed;
+          // Movimento direzionale controllato da uSpeedMultiplier
+          float v = aSpeed * uSpeed * uSpeedMultiplier;
           float shift = uTime * v;
 
           float t0 = dot(pos, dir);
@@ -119,13 +162,14 @@ uniform float uPR;
           float dt = t - t0;
           pos += dir * dt;
 
+          // Floatamento (noise) controllato separatamente da uNoiseMultiplier
           float ny =
             (sin(aSeed * 6.12 + uTime * uNoiseSpeed) * 0.5 +
-             sin(aSeed * 9.77 + uTime * uNoiseSpeed * 1.5) * 0.5) * uNoiseAmp;
+             sin(aSeed * 9.77 + uTime * uNoiseSpeed * 1.5) * 0.5) * uNoiseAmp * uNoiseMultiplier;
 
           float nz =
             (cos(aSeed * 4.12 + uTime * uNoiseSpeed * 1.2) * 0.5 +
-             sin(aSeed * 3.55 + uTime * uNoiseSpeed * 0.8) * 0.5) * uNoiseAmp;
+             sin(aSeed * 3.55 + uTime * uNoiseSpeed * 0.8) * 0.5) * uNoiseAmp * uNoiseMultiplier;
 
           pos.y += ny;
           pos.z += nz;
