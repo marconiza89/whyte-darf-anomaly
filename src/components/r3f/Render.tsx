@@ -11,7 +11,7 @@ import { Model } from "./Telescope";
 
 
 export const lightcolor = "#a4c9ff";
-export const sunposition: [number, number, number] = [0, 55, -100];
+export const sunposition: [number, number, number] = [0, 50, -100];
 
 // Componente per la luce dinamica che cambia colore durante implosion
 function DynamicLight() {
@@ -53,6 +53,12 @@ function DynamicLight() {
 function CameraController() {
     const { camera } = useThree();
     const exploreProgress = useAppStore((state) => state.exploreProgress);
+    const currentStep = useAppStore((state) => state.currentStep);
+    
+    // Target range per il tuner
+    const TARGET_MIN = 74;
+    const TARGET_MAX = 75;
+    const TARGET_CENTER = 74.5;
 
     useFrame((_, delta) => {
         // Smooth camera transition based on explore button progress
@@ -62,6 +68,32 @@ function CameraController() {
             targetZ,
             delta * 2
         );
+
+        // Camera shake durante la fase del tuner
+        if (currentStep === 1) {
+            const { tunerValue } = useAppStore.getState();
+            
+            // Calcola distanza dal target center
+            const distanceFromTarget = Math.abs(tunerValue - TARGET_CENTER);
+            
+            // Inverti: più vicino = più shake (max shake a distanza 0)
+            // Normalizza: distanza 0-50 → intensità 1-0
+            const proximity = Math.max(0, 1 - (distanceFromTarget / 50));
+            
+            // Intensità shake basata sulla vicinanza (0 = no shake, 1 = max shake)
+            const shakeIntensity = proximity * 0.055; // Max 0.15 unità di shake
+            
+            // Genera shake random
+            if (shakeIntensity > 0) {
+                const shakeX = (Math.random() - 0.5) * shakeIntensity;
+                const shakeY = (Math.random() - 0.5) * shakeIntensity;
+                const shakeZ = (Math.random() - 0.5) * shakeIntensity * 0.5; // Meno shake su Z
+                
+                camera.position.x += shakeX;
+                camera.position.y += shakeY;
+                camera.position.z += shakeZ;
+            }
+        }
 
         // Keep camera looking at origin
         camera.lookAt(0, 0, 0);
@@ -137,7 +169,101 @@ function GaiaTerrainGrid({ gridX = 2, gridZ = 2 }: { gridX?: number; gridZ?: num
 }
 
 function Anomaly() {
-    const meshRef = useRef<THREE.Mesh>(null);    
+    const meshRef = useRef<THREE.Mesh>(null);
+    const implosionAudioRef = useRef<THREE.PositionalAudio | null>(null);
+    const noiseAudioRef = useRef<THREE.PositionalAudio | null>(null);
+    const currentStep = useAppStore((state) => state.currentStep);
+    const { camera } = useThree();
+    
+    // Setup audio listener e positional audio
+    useEffect(() => {
+        if (!camera || !meshRef.current) return;
+        
+        // Aggiungi listener alla camera se non presente
+        if (!camera.children.find(child => child instanceof THREE.AudioListener)) {
+            const listener = new THREE.AudioListener();
+            camera.add(listener);
+            
+            // Crea positional audio per implosion
+            const implosionSound = new THREE.PositionalAudio(listener);
+            const audioLoader1 = new THREE.AudioLoader();
+            audioLoader1.load('/audio/implosion.mp3', (buffer) => {
+                implosionSound.setBuffer(buffer);
+                implosionSound.setRefDistance(20);
+                implosionSound.setVolume(1.0);
+                implosionSound.setLoop(false);
+            });
+            meshRef.current?.add(implosionSound);
+            implosionAudioRef.current = implosionSound;
+            
+            // Crea positional audio per noise
+            const noiseSound = new THREE.PositionalAudio(listener);
+            const audioLoader2 = new THREE.AudioLoader();
+            audioLoader2.load('/audio/noise.mp3', (buffer) => {
+                noiseSound.setBuffer(buffer);
+                noiseSound.setRefDistance(20);
+                noiseSound.setVolume(0.8);
+                noiseSound.setLoop(true);
+            });
+            meshRef.current?.add(noiseSound);
+            noiseAudioRef.current = noiseSound;
+        }
+        
+        return () => {
+            if (implosionAudioRef.current) {
+                implosionAudioRef.current.disconnect();
+            }
+            if (noiseAudioRef.current) {
+                noiseAudioRef.current.disconnect();
+            }
+        };
+    }, [camera]);
+    
+    // Trigger audio quando inizia l'implosione
+    useEffect(() => {
+        if (currentStep === 0.5 && implosionAudioRef.current && !implosionAudioRef.current.isPlaying) {
+            console.log("Playing implosion positional audio");
+            implosionAudioRef.current.play();
+        }
+    }, [currentStep]);
+    
+    // Trigger noise dopo implosione
+    useEffect(() => {
+        if (currentStep >= 1 && noiseAudioRef.current && !noiseAudioRef.current.isPlaying) {
+            console.log("Playing noise positional audio");
+            noiseAudioRef.current.play();
+        }
+        
+        // Stop noise se si torna indietro
+        if (currentStep < 1 && noiseAudioRef.current && noiseAudioRef.current.isPlaying) {
+            noiseAudioRef.current.stop();
+        }
+    }, [currentStep]);
+    
+    // Aggiorna distorsione e pitch in base a tunerValue
+    useFrame(() => {
+        if (!meshRef.current) return;
+        
+        const { tunerValue } = useAppStore.getState();
+        
+        // Converti tunerValue (0-100) in distort (0-1)
+        const distortAmount = tunerValue / 100;
+        
+        // Aggiorna distorsione del materiale
+        const material = meshRef.current.material as any;
+        if (material && material.distort !== undefined) {
+            material.distort = distortAmount;
+        }
+        
+        // Aggiorna pitch del noise audio
+        if (noiseAudioRef.current && noiseAudioRef.current.isPlaying) {
+            // Converti tunerValue (0-100) in playbackRate (0.5-2.0)
+            const pitchRate = 0.5 + (tunerValue / 100) * 1.5;
+            
+            noiseAudioRef.current.setPlaybackRate(pitchRate);
+        }
+    });
+    
     return (
         <mesh ref={meshRef}>
             <sphereGeometry args={[1.5, 64, 64]} />

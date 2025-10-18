@@ -7,14 +7,76 @@ import { SignalTuner } from "./minigames/SignalTuner";
 export function Overlay() {
   const [audioInitialized, setAudioInitialized] = useState(false);
 
+  const soundtrackRef = useRef<HTMLAudioElement | null>(null);
+  const fadeRAFRef = useRef<number | null>(null);
+
+  const playSoundtrack = () => {
+    const el = soundtrackRef.current;
+    if (!el) return;
+
+    try {
+      el.volume = 0;
+      el.play().then(() => {
+        const DURATION = 1200; // ms
+        let start = performance.now();
+
+        const tick = (t: number) => {
+          const dt = t - start;
+          const p = Math.min(dt / DURATION, 1);
+          el.volume = p; // fade da 0 a 1
+          if (p < 1) {
+            fadeRAFRef.current = requestAnimationFrame(tick);
+          }
+        };
+
+        if (fadeRAFRef.current) cancelAnimationFrame(fadeRAFRef.current);
+        fadeRAFRef.current = requestAnimationFrame(tick);
+      }).catch((err) => {
+        console.warn("Autoplay soundtrack bloccato:", err);
+      });
+    } catch (e) {
+      console.error("Errore avvio soundtrack:", e);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (fadeRAFRef.current) cancelAnimationFrame(fadeRAFRef.current);
+      if (soundtrackRef.current) {
+        try {
+          soundtrackRef.current.pause();
+          soundtrackRef.current.src = "";
+        } catch { }
+      }
+    };
+  }, []);
+
   return (
     <div className="">
-      {!audioInitialized && <StartScreen onStart={() => setAudioInitialized(true)} />}
+      {/* Audio element nascosto per la soundtrack */}
+      <audio
+        ref={soundtrackRef}
+        src="/audio/background.mp3"
+        loop
+        preload="auto"
+        playsInline
+      />
+
+      {!audioInitialized && (
+        <StartScreen
+          onStart={() => {
+            // Avvia soundtrack nell’handler del click (user gesture)
+            playSoundtrack();
+            setAudioInitialized(true);
+          }}
+        />
+      )}
+
       {audioInitialized && (
         <>
           <Hero />
           <ImplosionPhase />
-          {/* <SignalTuner /> */}
+          <SignalTuner />
         </>
       )}
     </div>
@@ -27,14 +89,14 @@ function StartScreen({ onStart }: { onStart: () => void }) {
       <div className="flex flex-col items-center text-neutral-50/90">
         <h1 className="text-6xl lg:text-8xl font-thin mb-4">WHYTE DARF</h1>
         <p className="tracking-[20px] lg:tracking-[40px] text-sm lg:text-lg mb-12">ANOMALY</p>
-        
+
         <button
           onClick={onStart}
           className="relative p-6 px-12 border border-neutral-50/40 hover:bg-neutral-50/10 transition-colors cursor-pointer"
         >
           <span className="text-lg tracking-widest">START</span>
         </button>
-        
+
         <p className="text-xs text-neutral-50/40 mt-8">Assicurati che l'audio sia attivo</p>
       </div>
     </div>
@@ -44,104 +106,59 @@ function StartScreen({ onStart }: { onStart: () => void }) {
 function ImplosionPhase() {
   const currentStep = useAppStore((state) => state.currentStep);
   const setStep = useAppStore((state) => state.setStep);
-  const setScene = useAppStore((state) => state.setScene);
-  const implosionProgress = useAppStore((state) => state.implosionProgress);
   const setImplosionProgress = useAppStore((state) => state.setImplosionProgress);
   const setFadeInProgress = useAppStore((state) => state.setFadeInProgress);
-  
-  const implosionAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const hasStartedRef = useRef(false);
   const sceneChangedRef = useRef(false);
 
   // Duration of implosion animation in milliseconds
-  const IMPLOSION_DURATION = 2500;
+  const IMPLOSION_DURATION = 1000;
   const FADE_IN_DURATION = 1000;
 
-  // Initialize and play implosion audio when entering this phase
-  useEffect(() => {
-    if (currentStep === 0.5 && !hasStartedRef.current) {
-      console.log("Starting implosion phase");
-      hasStartedRef.current = true;
-      sceneChangedRef.current = false;
-      
-      // Create and play implosion sound
-      const audio = new Audio('/audio/implosion.mp3');
-      audio.volume = 1.0;
-      audio.preload = 'auto';
-      implosionAudioRef.current = audio;
-      
-      // Add event listeners for debugging
-      audio.addEventListener('canplaythrough', () => {
-        console.log("Implosion audio loaded and ready");
-      });
-      
-      audio.addEventListener('playing', () => {
-        console.log("Implosion audio is playing");
-      });
-      
-      audio.addEventListener('error', (e) => {
-        console.error("Implosion audio error:", e);
-      });
-      
-      // Load and play
-      audio.load();
-      const playPromise = audio.play();
-      
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log("Implosion audio play started successfully");
-          })
-          .catch((err) => {
-            console.error("Implosion audio play failed:", err);
-          });
-      }
-    } else if (currentStep !== 0.5) {
-      hasStartedRef.current = false;
-      sceneChangedRef.current = false;
-    }
-  }, [currentStep]);
-
-  // Animate implosion progress
+  // Animate implosion progress (audio è gestito dal positional audio in Anomaly)
   useEffect(() => {
     if (currentStep === 0.5) {
+      if (!hasStartedRef.current) {
+        console.log("Starting implosion phase animation");
+        hasStartedRef.current = true;
+        sceneChangedRef.current = false;
+      }
+
       lastTimeRef.current = performance.now();
       let currentProgress = 0;
       setImplosionProgress(0);
-      
+
       const animate = (currentTime: number) => {
         const deltaTime = currentTime - lastTimeRef.current;
         lastTimeRef.current = currentTime;
-        
+
         const increment = deltaTime / IMPLOSION_DURATION;
         currentProgress = Math.min(currentProgress + increment, 1);
-        
+
         setImplosionProgress(currentProgress);
-        
-        // When implosion completes, change scene and start fade in
+
+        // When implosion completes, start fade in
         if (currentProgress >= 1 && !sceneChangedRef.current) {
-          console.log("Implosion complete, changing scene and starting fade in");
+          console.log("Implosion complete, starting fade in");
           sceneChangedRef.current = true;
-          
-          // Change scene
-          
-          
+
           // Start fade in animation
           let fadeProgress = 0;
           setFadeInProgress(0);
           lastTimeRef.current = performance.now();
-          
+
           const fadeIn = (fadeTime: number) => {
             const fadeDelta = fadeTime - lastTimeRef.current;
             lastTimeRef.current = fadeTime;
-            
+
             const fadeIncrement = fadeDelta / FADE_IN_DURATION;
             fadeProgress = Math.min(fadeProgress + fadeIncrement, 1);
-            
+
             setFadeInProgress(fadeProgress);
-            
+
             // When fade in completes, transition to step 1
             if (fadeProgress >= 1) {
               console.log("Fade in complete, transitioning to step 1");
@@ -151,23 +168,25 @@ function ImplosionPhase() {
               }, 100);
               return;
             }
-            
+
             animationRef.current = requestAnimationFrame(fadeIn);
           };
-          
+
           animationRef.current = requestAnimationFrame(fadeIn);
           return;
         }
-        
+
         animationRef.current = requestAnimationFrame(animate);
       };
-      
+
       animationRef.current = requestAnimationFrame(animate);
     } else {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
+      hasStartedRef.current = false;
+      sceneChangedRef.current = false;
     }
 
     return () => {
@@ -177,21 +196,11 @@ function ImplosionPhase() {
     };
   }, [currentStep, setImplosionProgress, setFadeInProgress, setStep]);
 
-  // Cleanup audio
-  useEffect(() => {
-    const audio = implosionAudioRef.current;
-    return () => {
-      if (audio) {
-        audio.pause();
-        audio.src = '';
-        audio.load();
-      }
-    };
-  }, []);
-
   // This component doesn't render any visible UI
   return null;
 }
+
+
 
 function Hero() {
   const currentStep = useAppStore((state) => state.currentStep);
@@ -235,6 +244,7 @@ function Hero() {
 
         // Load audio file
         const response = await fetch('/audio/wind.mp3');
+
         const arrayBuffer = await response.arrayBuffer();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         audioBufferRef.current = audioBuffer;
@@ -255,7 +265,7 @@ function Hero() {
         try {
           sourceNodeRef.current.stop();
           sourceNodeRef.current.disconnect();
-        } catch (e) {}
+        } catch (e) { }
       }
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close();
@@ -286,14 +296,14 @@ function Hero() {
     source.buffer = audioBuffer;
     source.loop = true;
     source.playbackRate.value = playbackRate;
-    
+
     // Connect source to gain
     source.connect(gainNode);
-    
+
     // Start playing
     source.start(0, pauseTimeRef.current % audioBuffer.duration);
     startTimeRef.current = audioContext.currentTime - pauseTimeRef.current;
-    
+
     sourceNodeRef.current = source;
   };
 
@@ -303,11 +313,11 @@ function Hero() {
 
     // Pitch up based on progress (1.0 to 2.5 playback rate)
     const pitchFactor = 1.0 + (exploreProgress * 1.5); // From 1.0x to 2.5x speed
-    
+
     // Update playback rate smoothly
     const source = sourceNodeRef.current;
     const audioContext = audioContextRef.current;
-    
+
     // Use linearRampToValueAtTime for smooth pitch changes
     source.playbackRate.cancelScheduledValues(audioContext.currentTime);
     source.playbackRate.setValueAtTime(
@@ -325,14 +335,14 @@ function Hero() {
   useEffect(() => {
     const gainNode = gainNodeRef.current;
     const audioContext = audioContextRef.current;
-    
+
     if (!gainNode || !audioContext) return;
 
     if (exploreProgress >= 0.8) {
       // Start fading out in the last 20% of progress
       const fadeProgress = (exploreProgress - 0.8) / 0.2; // 0 to 1
       const volume = 1.0 - fadeProgress;
-      
+
       // Smooth volume transition
       gainNode.gain.cancelScheduledValues(audioContext.currentTime);
       gainNode.gain.setValueAtTime(
@@ -376,28 +386,28 @@ function Hero() {
   useEffect(() => {
     if (isExplorePressed && currentStep === 0) {
       lastTimeRef.current = performance.now();
-      
+
       const animate = (currentTime: number) => {
         const deltaTime = currentTime - lastTimeRef.current;
         lastTimeRef.current = currentTime;
-        
+
         setExploreProgress((prev) => {
           const increment = deltaTime / PROGRESS_DURATION;
           const newProgress = Math.min(prev + increment, 1);
-          
+
           // When progress reaches 1, transition to implosion phase (step 0.5)
           if (newProgress >= 1 && prev < 1) {
             setTimeout(() => {
               setStep(0.5); // Trigger implosion phase
             }, 300);
           }
-          
+
           return newProgress;
         });
-        
+
         animationRef.current = requestAnimationFrame(animate);
       };
-      
+
       animationRef.current = requestAnimationFrame(animate);
     } else {
       if (animationRef.current) {
@@ -435,7 +445,7 @@ function Hero() {
       <div className="flex flex-col items-center h-1/3">
         <h1 className="text-5xl lg:text-8xl font-thin mb-2">WHYTE DARF</h1>
         <p className="tracking-[20px] lg:tracking-[40px] text-sm lg:text-lg">ANOMALY</p>
-        
+
         {/* Explore Button */}
         <button
           className="relative p-4 border border-neutral-50/20 mt-12 pointer-events-auto cursor-pointer overflow-hidden select-none"
@@ -453,7 +463,7 @@ function Hero() {
               transitionDuration: "0ms",
             }}
           />
-          
+
           {/* Text */}
           <span className="relative z-10">EXPLORE</span>
         </button>

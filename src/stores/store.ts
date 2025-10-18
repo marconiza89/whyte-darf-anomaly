@@ -35,6 +35,10 @@ interface AppState {
   // Flag per sapere se il bottone è premuto
   isExplorePressed: boolean;
   setExplorePressed: (pressed: boolean) => void;
+  
+  // Valore del tuner del segnale (0-100)
+  tunerValue: number;
+  setTunerValue: (value: number) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -60,4 +64,7 @@ export const useAppStore = create<AppState>((set) => ({
   
   isExplorePressed: false,
   setExplorePressed: (pressed) => set({ isExplorePressed: pressed }),
+  
+  tunerValue: 50,
+  setTunerValue: (value) => set({ tunerValue: value }),
 }));
